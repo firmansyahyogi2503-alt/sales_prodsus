@@ -1,0 +1,1560 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prodsus Analytics Digital</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Supabase JS Client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- SheetJS untuk Export Excel -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <style>
+    /* STICKY HEADER & STICKY COLUMN FOR TABLE */
+    .table-container {
+      max-height: 520px;
+      overflow: auto;
+    }
+
+    /* Freeze Header di bagian Atas */
+    .sticky-header th {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background-color: #f8fafc;
+    }
+
+    /* Sub-header (LM, UPD, SELISIH) Sticky Top Offset */
+    .sticky-header tr:nth-child(2) th {
+      top: 33px;
+    }
+
+    /* Freeze Kolom Pertama (Nama Modul/Toko) di Kiri */
+    .sticky-col-left {
+      position: sticky;
+      left: 0;
+      z-index: 10;
+      background-color: #ffffff;
+    }
+
+    /* Freeze Kolom Kedua untuk Menu Global */
+    .sticky-col-left-2 {
+      position: sticky;
+      left: 120px;
+      z-index: 10;
+      background-color: #ffffff;
+    }
+
+    /* Agar Sudut Kiri Atas Tetap di Atas Z-Index Paling Tinggi */
+    .sticky-header th.sticky-col-left,
+    .sticky-header th.sticky-col-left-2 {
+      z-index: 30;
+      background-color: #f1f5f9;
+    }
+
+    .sidebar-transition {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col md:flex-row overflow-x-hidden">
+
+  <!-- MODAL LOGIN UTAMA (Tampil jika belum login atau setelah refresh) -->
+  <div id="loginModal" class="fixed inset-0 z-[100] bg-slate-900 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 md:p-8 space-y-6">
+      <div class="text-center space-y-2">
+        <div class="w-12 h-12 bg-indigo-600 rounded-xl mx-auto flex items-center justify-center text-white font-black text-xl shadow-lg shadow-indigo-500/30">
+          PA
+        </div>
+        <h2 class="text-2xl font-black text-slate-900 tracking-tight">Prodsus Analytics</h2>
+        <p class="text-xs text-slate-500 font-medium">Silakan masuk menggunakan kredensial Anda</p>
+      </div>
+
+      <form onsubmit="handleLogin(event)" class="space-y-4">
+        <div>
+          <label for="loginUsername" class="block text-xs font-bold text-slate-700 uppercase mb-1">Username</label>
+          <input type="text" id="loginUsername" required placeholder="Masukkan username" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div>
+          <label for="loginPassword" class="block text-xs font-bold text-slate-700 uppercase mb-1">Password</label>
+          <input type="password" id="loginPassword" required placeholder="••••••••" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+
+        <div id="loginError" class="hidden p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-600 text-xs font-bold text-center"></div>
+
+        <button type="submit" id="btnLoginSubmit" class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-200 transition active:scale-95">
+          Masuk ke Dashboard
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- OVERLAY UNTUK MOBILE MENU -->
+  <div id="sidebarOverlay" onclick="toggleSidebarMobile()" class="fixed inset-0 bg-slate-900/50 z-40 hidden md:hidden"></div>
+
+  <!-- SIDEBAR MENU -->
+  <aside id="sidebar" class="sidebar-transition w-64 bg-slate-900 text-slate-300 flex flex-col fixed inset-y-0 left-0 z-50 shadow-xl -translate-x-full md:translate-x-0">
+    <!-- Header Sidebar & Toggle Button -->
+    <div class="p-4 flex items-center justify-between border-b border-slate-800">
+      <div id="sidebarTitle" class="flex items-center gap-2 overflow-hidden whitespace-nowrap">
+        <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-black text-sm shrink-0">
+          PA
+        </div>
+        <span class="font-bold text-sm text-white tracking-wide">Prodsus Analytics</span>
+      </div>
+      <button onclick="toggleSidebar()" class="hidden md:block p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition shrink-0">
+        <svg id="toggleIcon" class="w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+        </svg>
+      </button>
+      <button onclick="toggleSidebarMobile()" class="md:hidden p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+
+    <!-- Menu Items -->
+    <nav class="flex-1 p-3 space-y-1.5 overflow-y-auto">
+      <!-- MENU 1 -->
+      <button id="btnMenuToko" onclick="switchMenu('toko')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-semibold text-xs transition bg-indigo-600 text-white shadow-lg shadow-indigo-600/30">
+        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5m0 0h4m-4 0V11m0 4h4" />
+        </svg>
+        <span class="sidebar-text truncate">1. Data Sales Per Toko</span>
+      </button>
+
+      <!-- MENU 2 -->
+      <button id="btnMenuGlobal" onclick="switchMenu('global')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-semibold text-xs transition text-slate-400 hover:bg-slate-800 hover:text-slate-200">
+        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 012 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2v1a2 2 0 002 2h2.108M19 11l-2.73-2.73a1 1 0 00-1.414 0l-1.99 1.99a1 1 0 01-1.414 0L10 8" />
+        </svg>
+        <span class="sidebar-text truncate">2. Global Comparison</span>
+      </button>
+
+      <!-- MENU 3 -->
+      <button id="btnMenuAmAs" onclick="switchMenu('amas')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-semibold text-xs transition text-slate-400 hover:bg-slate-800 hover:text-slate-200">
+        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+        <span class="sidebar-text truncate">3. Laporan per AM & AS</span>
+      </button>
+
+      <!-- MENU 4: RANKING MODUL -->
+      <button id="btnMenuRankModul" onclick="switchMenu('rankModul')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-semibold text-xs transition text-slate-400 hover:bg-slate-800 hover:text-slate-200">
+        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+        </svg>
+        <span class="sidebar-text truncate">4. Ranking Modul</span>
+      </button>
+
+      <!-- MENU 5: RANKING TOKO -->
+      <button id="btnMenuRankToko" onclick="switchMenu('rankToko')" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-semibold text-xs transition text-slate-400 hover:bg-slate-800 hover:text-slate-200">
+        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+        <span class="sidebar-text truncate">5. Ranking Toko</span>
+      </button>
+
+      <!-- MENU KHUSUS ADMIN (MANAGEMENT USER) -->
+      <button id="btnMenuAdmin" onclick="openAdminModal()" class="hidden w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-semibold text-xs transition text-amber-400 hover:bg-amber-500/10 border border-amber-500/30 mt-4">
+        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+        </svg>
+        <span class="sidebar-text truncate">Kelola Pengguna</span>
+      </button>
+    </nav>
+
+    <!-- Footer User Info & Logout -->
+    <div class="p-3 border-t border-slate-800 text-xs space-y-2">
+      <div class="flex items-center justify-between px-2.5 py-2 rounded-lg bg-slate-800 text-slate-300">
+        <div class="truncate">
+          <p id="userDisplayName" class="font-bold text-white truncate">-</p>
+          <p id="userDisplayRole" class="text-[10px] text-indigo-400 font-semibold capitalize uppercase">-</p>
+        </div>
+        <button onclick="handleLogout()" title="Keluar Log" class="p-1.5 hover:bg-slate-700 text-slate-400 hover:text-rose-400 rounded-lg transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+        </button>
+      </div>
+
+      <div id="statusSupabase" class="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+        <span class="sidebar-text truncate">Supabase Connected</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- KONTEN UTAMA -->
+  <main id="mainContent" class="flex-1 md:ml-64 p-4 md:p-8 space-y-6 transition-all duration-300 min-w-0 w-full">
+
+    <!-- HEADER TOPBAR MOBILE & TITLE -->
+    <div class="flex items-center justify-between gap-4 bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200/80">
+      <div class="flex items-center gap-3">
+        <button onclick="toggleSidebarMobile()" class="md:hidden p-2 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <div>
+          <h1 id="pageTitle" class="text-lg md:text-2xl font-black text-slate-900 tracking-tight">Data Sales Per Toko</h1>
+          <p id="pageSubtitle" class="text-xs md:text-sm text-slate-500 font-medium mt-0.5">Sales Modul Prodsus Per Toko</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- PENCARIAN & INFO TOKO (MENU 1) -->
+    <div id="sectionSearch" class="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200/80 space-y-4">
+      <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Informasi & Pencarian Toko</h2>
+      
+      <div class="flex flex-col sm:flex-row gap-3">
+        <div class="relative flex-1">
+          <input 
+            type="text" 
+            id="inputToko" 
+            placeholder="Masukkan Kode Toko (KDTK) atau Nama Toko..." 
+            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition uppercase placeholder:normal-case placeholder:font-normal placeholder:text-slate-400 text-sm"
+            onkeypress="if(event.key === 'Enter') cariToko()"
+          />
+        </div>
+        <div class="flex gap-2">
+          <button 
+            onclick="cariToko()" 
+            class="flex-1 sm:flex-none px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-200 transition active:scale-95 shrink-0"
+          >
+            Cari Toko
+          </button>
+          <button 
+            onclick="resetSearch()" 
+            class="flex-1 sm:flex-none px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold rounded-xl transition text-sm shrink-0"
+          >
+            Reset
+          </button>
+        </div>
+      </div>
+
+      <!-- CARD INFO TOKO HASIL SEARCH -->
+      <div id="infoTokoCard" class="hidden mt-4 p-4 bg-indigo-50/60 border border-indigo-100 rounded-xl space-y-1">
+        <h3 id="infoNamaToko" class="text-base md:text-lg font-black text-indigo-950"></h3>
+        <p class="text-xs font-semibold text-indigo-700">
+          Area Manager: <span id="infoAM" class="font-bold text-slate-800"></span> | Supervisor: <span id="infoAS" class="font-bold text-slate-800"></span>
+        </p>
+      </div>
+    </div>
+
+    <!-- FILTER AREA MANAGER & SUPERVISOR (MENU 3) -->
+    <div id="sectionFilterAmAs" class="hidden bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200/80 space-y-4">
+      <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Filter Hierarki Manajemen (AM & AS)</h2>
+      
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <!-- Radio Toggle Pilihan Utama -->
+        <div class="sm:col-span-2 flex items-center gap-6 bg-slate-50 p-3 rounded-xl border border-slate-200/80">
+          <span class="text-xs font-bold text-slate-700">Pilih Tipe Hierarki:</span>
+          <label class="inline-flex items-center gap-2 cursor-pointer font-semibold text-xs text-slate-800">
+            <input type="radio" name="radioAmAsType" value="AM" checked onchange="handleAmAsRadioChange()" class="w-4 h-4 text-indigo-600 focus:ring-indigo-500">
+            By Area Manager (AM)
+          </label>
+          <label class="inline-flex items-center gap-2 cursor-pointer font-semibold text-xs text-slate-800">
+            <input type="radio" name="radioAmAsType" value="AS" onchange="handleAmAsRadioChange()" class="w-4 h-4 text-indigo-600 focus:ring-indigo-500">
+            By Area Supervisor (AS)
+          </label>
+        </div>
+
+        <!-- Dropdown AM -->
+        <div class="space-y-1.5">
+          <label for="selectAM" class="text-xs font-bold text-slate-600">Pilih Area Manager (AM):</label>
+          <select id="selectAM" onchange="handleSelectAMChange()" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <option value="">-- Pilih AM --</option>
+          </select>
+        </div>
+
+        <!-- Dropdown AS -->
+        <div class="space-y-1.5">
+          <label for="selectAS" class="text-xs font-bold text-slate-600">Pilih Area Supervisor (AS):</label>
+          <select id="selectAS" onchange="handleSelectASChange()" disabled class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50">
+            <option value="">-- Pilih AS --</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- CARD INFO FILTER AKTIF -->
+      <div id="infoAmAsCard" class="hidden p-4 bg-indigo-50/60 border border-indigo-100 rounded-xl flex items-center justify-between">
+        <div>
+          <span id="infoAmAsLabel" class="text-xs font-bold uppercase tracking-wider text-indigo-500">Area Manager</span>
+          <h3 id="infoAmAsName" class="text-base md:text-lg font-black text-indigo-950"></h3>
+        </div>
+        <div class="text-right">
+          <span class="text-xs font-bold text-indigo-600">Cakupan Toko Bawahan:</span>
+          <p id="infoAmAsTotalToko" class="text-lg md:text-xl font-black text-indigo-900">0 Toko</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- PANEL FILTER MENU 4: RANKING MODUL -->
+    <div id="sectionFilterRankModul" class="hidden bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200/80 space-y-4">
+      <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Kategori Ranking Modul</h2>
+      <div class="flex flex-wrap items-center gap-6 bg-slate-50 p-4 rounded-xl border border-slate-200/80">
+        <label class="inline-flex items-center gap-2 cursor-pointer font-bold text-xs text-slate-800">
+          <input type="radio" name="radioRankModul" value="SPD" checked onchange="triggerRankModulCalculation()" class="w-4 h-4 text-indigo-600 focus:ring-indigo-500">
+          1. Ranking By SPD Rupiah
+        </label>
+        <label class="inline-flex items-center gap-2 cursor-pointer font-bold text-xs text-slate-800">
+          <input type="radio" name="radioRankModul" value="GROWTH" onchange="triggerRankModulCalculation()" class="w-4 h-4 text-indigo-600 focus:ring-indigo-500">
+          2. Ranking By Growth SPD
+        </label>
+      </div>
+    </div>
+
+    <!-- PANEL FILTER MENU 5: RANKING TOKO -->
+    <div id="sectionFilterRankToko" class="hidden bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200/80 space-y-4">
+      <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Kategori Ranking Toko & Filter Modul</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Pilihan Tipe Ranking Toko -->
+        <div class="flex items-center gap-6 bg-slate-50 p-3.5 rounded-xl border border-slate-200/80">
+          <label class="inline-flex items-center gap-2 cursor-pointer font-bold text-xs text-slate-800">
+            <input type="radio" name="radioRankToko" value="SPD" checked onchange="triggerRankTokoCalculation()" class="w-4 h-4 text-indigo-600 focus:ring-indigo-500">
+            1. Ranking By SPD Toko
+          </label>
+          <label class="inline-flex items-center gap-2 cursor-pointer font-bold text-xs text-slate-800">
+            <input type="radio" name="radioRankToko" value="GROWTH" onchange="triggerRankTokoCalculation()" class="w-4 h-4 text-indigo-600 focus:ring-indigo-500">
+            2. Ranking By Growth SPD Per Toko
+          </label>
+        </div>
+
+        <!-- Dropdown Pilih Modul Khusus Ranking Toko -->
+        <div class="space-y-1.5">
+          <label for="selectModulRankToko" class="text-xs font-bold text-slate-600">Pilih Modul yang Ditampilkan:</label>
+          <select id="selectModulRankToko" onchange="triggerRankTokoCalculation()" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <option value="ALL">Semua Modul</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- RINGKASAN PERFORMA -->
+    <div class="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200/80 space-y-4">
+      <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Ringkasan Performa</h2>
+      
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+        <div class="p-4 bg-slate-50 border border-slate-100 rounded-xl">
+          <p class="text-[11px] font-bold text-slate-400 uppercase">Total SPD RP (LM)</p>
+          <p id="totalSpdLM" class="text-xl md:text-2xl font-black text-slate-800 mt-1">Rp 0</p>
+        </div>
+        <div class="p-4 bg-slate-50 border border-slate-100 rounded-xl">
+          <p class="text-[11px] font-bold text-slate-400 uppercase">Total SPD RP (UPD)</p>
+          <p id="totalSpdUPD" class="text-xl md:text-2xl font-black text-indigo-600 mt-1">Rp 0</p>
+        </div>
+        <div class="p-4 bg-slate-50 border border-slate-100 rounded-xl">
+          <p class="text-[11px] font-bold text-slate-400 uppercase">Total Growth SPD</p>
+          <p id="growthSPD" class="text-xl md:text-2xl font-black text-emerald-600 mt-1">0,00%</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- TABEL KOMPONEN MODUL SALES -->
+    <div class="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200/80 space-y-4">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 id="tableHeaderTitle" class="text-base md:text-lg font-bold text-slate-900">Komponen Modul Sales</h2>
+          <p id="tableHeaderSubtitle" class="text-xs text-slate-500 font-medium">Perbandingan kinerja modul LM vs Update</p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3">
+          <!-- TOGGLE MODUL TIDAK AKTIF (Khusus Menu 1) -->
+          <label id="containerToggleInactive" class="inline-flex items-center cursor-pointer select-none">
+            <input type="checkbox" id="toggleInactive" class="sr-only peer" onchange="applyFilterAndSort()">
+            <div class="relative w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+            <span class="ms-2 text-xs font-bold text-slate-700">Tampilkan Non-Aktif</span>
+          </label>
+
+          <!-- Filter Modul (Menu 1, 2, 3) -->
+          <select id="filterModul" onchange="applyFilterAndSort()" class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 flex-1 sm:flex-none">
+            <option value="ALL">Semua Modul</option>
+          </select>
+
+          <!-- Sorting (Menu 1, 2, 3) -->
+          <select id="sortBy" onchange="applyFilterAndSort()" class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 flex-1 sm:flex-none">
+            <option value="SPD_RP_DESC">Growth SPD Rp (Tertinggi)</option>
+            <option value="SPD_RP_ASC">Growth SPD Rp (Terendah)</option>
+            <option value="SPD_UPD_DESC">SPD Rp UPD (Tertinggi)</option>
+            <option value="MARGIN_DESC">Margin % UPD (Tertinggi)</option>
+          </select>
+
+          <!-- Action Buttons -->
+          <button onclick="exportToExcel()" class="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition active:scale-95">
+            Export Excel
+          </button>
+        </div>
+      </div>
+
+      <!-- TABEL DATA -->
+      <div class="table-container border border-slate-200 rounded-xl shadow-inner overflow-x-auto max-h-[70vh]">
+        <table class="w-full text-xs text-right whitespace-nowrap border-collapse">
+          <thead class="text-slate-600 font-bold uppercase tracking-wider shadow-sm">
+            <tr id="trHeaderRow1">
+              <th id="thPrimaryCol" rowspan="2" class="sticky top-0 left-0 z-30 bg-slate-100 py-3 px-3 text-left border-r border-b border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                Modul
+              </th>
+              
+              <th id="thJmlToko" rowspan="2" class="sticky top-0 z-20 py-3 px-3 text-center border-r border-b border-slate-200 bg-indigo-100 text-indigo-900">
+                Jml Toko Main
+              </th>
+              
+              <th colspan="3" class="sticky top-0 z-20 py-2 px-2 border-r border-b border-slate-200 text-center bg-slate-100">SPD QTY</th>
+              <th colspan="3" class="sticky top-0 z-20 py-2 px-2 border-r border-b border-slate-200 text-center bg-indigo-100 text-indigo-900">SPD RP</th>
+              <th colspan="3" class="sticky top-0 z-20 py-2 px-2 border-r border-b border-slate-200 text-center bg-slate-100">MARGIN %</th>
+              <th colspan="3" class="sticky top-0 z-20 py-2 px-2 border-r border-b border-slate-200 text-center bg-slate-100">BA %</th>
+              <th colspan="3" class="sticky top-0 z-20 py-2 px-2 border-b border-slate-200 text-center bg-indigo-100 text-indigo-900">Nett Margin</th>
+            </tr>
+            
+            <tr id="trHeaderRow2" class="text-[10px] border-b border-slate-200">
+              <th class="sticky top-[33px] z-20 py-2 px-2 border-r border-slate-200 bg-slate-50">LM</th>
+              <th class="sticky top-[33px] z-20 py-2 px-2 border-r border-slate-200 bg-slate-50">UPD</th>
+              <th class="sticky top-[33px] z-20 py-2 px-2 border-r border-slate-200 bg-slate-50">Growth</th>
+              
+              <th class="sticky top-[33px] z-20 py-2 px-2 border-r border-slate-200 bg-indigo-50">LM</th>
+              <th class="sticky top-[33px] z-20 py-2 px-2 border-r border-slate-200 bg-indigo-50">UPD</th>
+              <th class="sticky top-[33px] z-20 py-2 px-2 border-r border-slate-200 bg-indigo-50">Growth</th>
+              
+              <th class="sticky top-[33px] z-20 py-2 px-2 border-r border-slate-200 bg-slate-50">LM</th>
+              <th class="sticky top-[33px] z-20 py-2 px-2 border-r border-slate-200 bg-slate-50">UPD</th>
+              <th class="sticky top-[33px] z-20 py-2 px-2 border-r border-slate-200 text-slate-900 bg-slate-200">SELISIH</th>
+              
+              <th class="sticky top-[33px] z-20 py-2 px-2 border-r border-slate-200 bg-slate-50">LM</th>
+              <th class="sticky top-[33px] z-20 py-2 px-2 border-r border-slate-200 bg-slate-50">UPD</th>
+              <th class="sticky top-[33px] z-20 py-2 px-2 border-r border-slate-200 text-slate-900 bg-slate-200">SELISIH</th>
+              
+              <th class="sticky top-[33px] z-20 py-2 px-2 border-r border-slate-200 bg-indigo-50">LM</th>
+              <th class="sticky top-[33px] z-20 py-2 px-2 border-r border-slate-200 bg-indigo-50">UPD</th>
+              <th class="sticky top-[33px] z-20 py-2 px-2 bg-indigo-50">Growth</th>
+            </tr>
+          </thead>
+          <tbody id="tabelBody" class="divide-y divide-slate-100 font-medium">
+            <tr>
+              <td colspan="17" class="py-8 text-center text-slate-400 font-medium bg-white">
+                Ketik kode/nama toko di atas untuk menampilkan data analytics
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <!-- MODAL ADMIN USER MANAGEMENT -->
+  <div id="adminModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-6 space-y-6 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b pb-4">
+        <h3 class="text-lg font-black text-slate-900">Manajemen Pengguna Dashboard</h3>
+        <button onclick="closeAdminModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl">&times;</button>
+      </div>
+
+      <!-- FORM TAMBAH / UPDATE USER -->
+      <form onsubmit="handleSaveUser(event)" class="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Username</label>
+          <input type="text" id="adminUsername" required placeholder="username" class="w-full px-3 py-2 border rounded-lg text-xs font-semibold">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Password</label>
+          <input type="text" id="adminPassword" required placeholder="password" class="w-full px-3 py-2 border rounded-lg text-xs font-semibold">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Nama Lengkap</label>
+          <input type="text" id="adminFullName" placeholder="Nama Operator" class="w-full px-3 py-2 border rounded-lg text-xs font-semibold">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Role Access</label>
+          <select id="adminRole" class="w-full px-3 py-2 border rounded-lg text-xs font-semibold">
+            <option value="user">User biasa</option>
+            <option value="admin">Admin System</option>
+          </select>
+        </div>
+        <div class="md:col-span-2 flex justify-end gap-2 mt-2">
+          <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg transition">
+            Simpan / Update User
+          </button>
+        </div>
+      </form>
+
+      <!-- TABEL DAFTAR USER -->
+      <div class="border rounded-xl overflow-hidden">
+        <table class="w-full text-xs text-left">
+          <thead class="bg-slate-100 font-bold text-slate-600 uppercase border-b">
+            <tr>
+              <th class="p-3">Username</th>
+              <th class="p-3">Nama</th>
+              <th class="p-3">Role</th>
+              <th class="p-3 text-center">Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="adminUserTableBody" class="divide-y divide-slate-100">
+            <tr><td colspan="4" class="p-4 text-center text-slate-400">Memuat pengguna...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOGIKA SUPABASE & AUTENTIKASI -->
+  <script>
+    const SUPABASE_URL = 'https://psttqgemviadcuxmjjta.supabase.co'; 
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBzdHRxZ2VtdmlhZGN1eG1qanRhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTc5NTY4NywiZXhwIjoyMDc3MzcxNjg3fQ.IYOd05wI3yRna5D5EKj-ppj9z7qc9s06OOs3MzOHpkw'; 
+
+    const supabaseClient = (SUPABASE_URL !== 'https://YOUR_SUPABASE_PROJECT_ID.supabase.co' && window.supabase) 
+      ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) 
+      : null;
+
+    let currentMenu = 'toko'; 
+    let storeDataFull = [];
+    let globalDataFull = [];
+    let rawAllDataCache = []; 
+    let amAsCalculatedData = [];
+    let rankModulData = [];
+    let rankTokoData = [];
+    let currentCalculatedData = [];
+    let isSidebarOpen = true;
+
+    // --- LOGIKA AUTENTIKASI DAN KEAMANAN 15 MENIT TIMEOUT ---
+    let currentUser = null;
+    let inactivityTimer = null;
+    const INACTIVITY_LIMIT = 15 * 60 * 1000; // 15 menit dalam milidetik
+
+    function resetInactivityTimer() {
+      if (!currentUser) return;
+      clearTimeout(inactivityTimer);
+      inactivityTimer = setTimeout(() => {
+        alert("Sesi Anda berakhir karena tidak ada aktivitas selama 15 menit.");
+        handleLogout();
+      }, INACTIVITY_LIMIT);
+    }
+
+    // Deteksi Aktivitas User untuk Reset Timer
+    ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'].forEach(evt => {
+      window.addEventListener(evt, resetInactivityTimer);
+    });
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      const uInput = document.getElementById('loginUsername').value.trim();
+      const pInput = document.getElementById('loginPassword').value.trim();
+      const errEl = document.getElementById('loginError');
+
+      errEl.classList.add('hidden');
+
+      if (!supabaseClient) {
+        errEl.innerText = "Koneksi Supabase belum disetup dengan benar.";
+        errEl.classList.remove('hidden');
+        return;
+      }
+
+      try {
+        const { data, error } = await supabaseClient
+          .from('app_users')
+          .select('*')
+          .eq('username', uInput)
+          .eq('password', pInput)
+          .single();
+
+        if (error || !data) {
+          errEl.innerText = "Username atau password salah!";
+          errEl.classList.remove('hidden');
+          return;
+        }
+
+        // Login sukses
+        currentUser = data;
+        document.getElementById('userDisplayName').innerText = data.full_name || data.username;
+        document.getElementById('userDisplayRole').innerText = data.role;
+        
+        if (data.role === 'admin') {
+          document.getElementById('btnMenuAdmin').classList.remove('hidden');
+        } else {
+          document.getElementById('btnMenuAdmin').classList.add('hidden');
+        }
+
+        document.getElementById('loginModal').classList.add('hidden');
+        resetInactivityTimer();
+      } catch (err) {
+        errEl.innerText = "Error autentikasi: " + err.message;
+        errEl.classList.remove('hidden');
+      }
+    }
+
+    function handleLogout() {
+      currentUser = null;
+      clearTimeout(inactivityTimer);
+      document.getElementById('loginUsername').value = '';
+      document.getElementById('loginPassword').value = '';
+      document.getElementById('loginModal').classList.remove('hidden');
+    }
+
+    // PAKSA LOGOUT/MINTA PASSWORD SAAT DI-REFRESH
+    window.addEventListener('DOMContentLoaded', () => {
+      handleLogout();
+    });
+
+    /* MANAGEMENT ADMIN USER */
+    async function openAdminModal() {
+      if (!currentUser || currentUser.role !== 'admin') return;
+      document.getElementById('adminModal').classList.remove('hidden');
+      await loadAdminUserList();
+    }
+
+    function closeAdminModal() {
+      document.getElementById('adminModal').classList.add('hidden');
+    }
+
+    async function loadAdminUserList() {
+      const tbody = document.getElementById('adminUserTableBody');
+      tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-slate-400">Memuat data...</td></tr>';
+
+      const { data, error } = await supabaseClient.from('app_users').select('*').order('created_at', { ascending: true });
+      if (error) {
+        tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-rose-500">Error: ${error.message}</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = '';
+      data.forEach(u => {
+        tbody.innerHTML += `
+          <tr class="hover:bg-slate-50">
+            <td class="p-3 font-bold">${u.username}</td>
+            <td class="p-3">${u.full_name || '-'}</td>
+            <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${u.role === 'admin' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'}">${u.role}</span></td>
+            <td class="p-3 text-center">
+              <button onclick="deleteUser('${u.id}', '${u.username}')" class="text-rose-600 hover:text-rose-800 font-bold text-xs">Hapus</button>
+            </td>
+          </tr>
+        `;
+      });
+    }
+
+    async function handleSaveUser(e) {
+      e.preventDefault();
+      const u = document.getElementById('adminUsername').value.trim();
+      const p = document.getElementById('adminPassword').value.trim();
+      const fn = document.getElementById('adminFullName').value.trim();
+      const r = document.getElementById('adminRole').value;
+
+      const { error } = await supabaseClient.from('app_users').upsert({
+        username: u,
+        password: p,
+        full_name: fn,
+        role: r
+      }, { onConflict: 'username' });
+
+      if (error) {
+        alert("Gagal menyimpan pengguna: " + error.message);
+      } else {
+        alert("Pengguna berhasil disimpan/diperbarui!");
+        document.getElementById('adminUsername').value = '';
+        document.getElementById('adminPassword').value = '';
+        document.getElementById('adminFullName').value = '';
+        loadAdminUserList();
+      }
+    }
+
+    async function deleteUser(id, username) {
+      if (username === currentUser.username) {
+        alert("Tidak dapat menghapus akun sendiri!");
+        return;
+      }
+      if (!confirm(`Yakin ingin menghapus user ${username}?`)) return;
+
+      const { error } = await supabaseClient.from('app_users').delete().eq('id', id);
+      if (error) {
+        alert("Gagal menghapus user: " + error.message);
+      } else {
+        loadAdminUserList();
+      }
+    }
+
+    /* SISTEM INTERFACE UI ANALYTICS */
+    function toggleSidebar() {
+      const sidebar = document.getElementById('sidebar');
+      const mainContent = document.getElementById('mainContent');
+      const toggleIcon = document.getElementById('toggleIcon');
+      const sidebarTexts = document.querySelectorAll('.sidebar-text');
+
+      isSidebarOpen = !isSidebarOpen;
+
+      if (isSidebarOpen) {
+        sidebar.classList.remove('w-20');
+        sidebar.classList.add('w-64');
+        mainContent.classList.remove('md:ml-20');
+        mainContent.classList.add('md:ml-64');
+        toggleIcon.classList.remove('rotate-180');
+        sidebarTexts.forEach(el => el.classList.remove('hidden'));
+      } else {
+        sidebar.classList.remove('w-64');
+        sidebar.classList.add('w-20');
+        mainContent.classList.remove('md:ml-64');
+        mainContent.classList.add('md:ml-20');
+        toggleIcon.classList.add('rotate-180');
+        sidebarTexts.forEach(el => el.classList.add('hidden'));
+      }
+    }
+
+    function toggleSidebarMobile() {
+      const sidebar = document.getElementById('sidebar');
+      const overlay = document.getElementById('sidebarOverlay');
+      sidebar.classList.toggle('-translate-x-full');
+      overlay.classList.toggle('hidden');
+    }
+
+    function switchMenu(menu) {
+      currentMenu = menu;
+      const btnToko = document.getElementById('btnMenuToko');
+      const btnGlobal = document.getElementById('btnMenuGlobal');
+      const btnAmAs = document.getElementById('btnMenuAmAs');
+      const btnRankModul = document.getElementById('btnMenuRankModul');
+      const btnRankToko = document.getElementById('btnMenuRankToko');
+      
+      const sectionSearch = document.getElementById('sectionSearch');
+      const sectionFilterAmAs = document.getElementById('sectionFilterAmAs');
+      const sectionFilterRankModul = document.getElementById('sectionFilterRankModul');
+      const sectionFilterRankToko = document.getElementById('sectionFilterRankToko');
+
+      const containerToggleInactive = document.getElementById('containerToggleInactive');
+      const filterModul = document.getElementById('filterModul');
+      const sortBy = document.getElementById('sortBy');
+      const thJmlToko = document.getElementById('thJmlToko');
+      const thPrimaryCol = document.getElementById('thPrimaryCol');
+
+      if (window.innerWidth < 768) {
+        toggleSidebarMobile();
+      }
+
+      const defaultBtnClass = "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-semibold text-xs transition text-slate-400 hover:bg-slate-800 hover:text-slate-200";
+      const activeBtnClass = "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-semibold text-xs transition bg-indigo-600 text-white shadow-lg shadow-indigo-600/30";
+
+      btnToko.className = defaultBtnClass;
+      btnGlobal.className = defaultBtnClass;
+      btnAmAs.className = defaultBtnClass;
+      btnRankModul.className = defaultBtnClass;
+      btnRankToko.className = defaultBtnClass;
+
+      filterModul.classList.remove('hidden');
+      sortBy.classList.remove('hidden');
+      thPrimaryCol.innerText = "Modul";
+
+      if (menu === 'toko') {
+        btnToko.className = activeBtnClass;
+        document.getElementById('pageTitle').innerText = "Data Sales Per Toko";
+        document.getElementById('pageSubtitle').innerText = "Sales Modul Prodsus Per Toko";
+        
+        sectionSearch.classList.remove('hidden');
+        sectionFilterAmAs.classList.add('hidden');
+        sectionFilterRankModul.classList.add('hidden');
+        sectionFilterRankToko.classList.add('hidden');
+
+        containerToggleInactive.classList.remove('hidden');
+        thJmlToko.classList.add('hidden');
+
+        applyFilterAndSort();
+      } else if (menu === 'global') {
+        btnGlobal.className = activeBtnClass;
+        document.getElementById('pageTitle').innerText = "Global Comparison";
+        document.getElementById('pageSubtitle').innerText = "Sales Modul Prodsus Secara Global";
+
+        sectionSearch.classList.add('hidden');
+        sectionFilterAmAs.classList.add('hidden');
+        sectionFilterRankModul.classList.add('hidden');
+        sectionFilterRankToko.classList.add('hidden');
+
+        containerToggleInactive.classList.add('hidden');
+        thJmlToko.classList.remove('hidden');
+
+        if (globalDataFull.length === 0) {
+          fetchGlobalData();
+        } else {
+          applyFilterAndSort();
+        }
+      } else if (menu === 'amas') {
+        btnAmAs.className = activeBtnClass;
+        document.getElementById('pageTitle').innerText = "Laporan Per AM & AS";
+        document.getElementById('pageSubtitle').innerText = "Global Sales Modul Berdasarkan Area Manager & Area Supervisor";
+
+        sectionSearch.classList.add('hidden');
+        sectionFilterAmAs.classList.remove('hidden');
+        sectionFilterRankModul.classList.add('hidden');
+        sectionFilterRankToko.classList.add('hidden');
+
+        containerToggleInactive.classList.add('hidden');
+        thJmlToko.classList.remove('hidden');
+
+        if (rawAllDataCache.length === 0) {
+          fetchAllMasterDataForAmAs();
+        } else {
+          populateAmAsDropdowns();
+          triggerAmAsCalculation();
+        }
+      } else if (menu === 'rankModul') {
+        btnRankModul.className = activeBtnClass;
+        document.getElementById('pageTitle').innerText = "Ranking Modul";
+        document.getElementById('pageSubtitle').innerText = "Ranking Modul Berdasarkan SPD Rupiah dan Growth SPD";
+
+        sectionSearch.classList.add('hidden');
+        sectionFilterAmAs.classList.add('hidden');
+        sectionFilterRankModul.classList.remove('hidden');
+        sectionFilterRankToko.classList.add('hidden');
+
+        containerToggleInactive.classList.add('hidden');
+        filterModul.classList.add('hidden');
+        sortBy.classList.add('hidden');
+        thJmlToko.classList.remove('hidden');
+
+        if (rawAllDataCache.length === 0) {
+          fetchMasterDataForRank();
+        } else {
+          triggerRankModulCalculation();
+        }
+      } else if (menu === 'rankToko') {
+        btnRankToko.className = activeBtnClass;
+        document.getElementById('pageTitle').innerText = "Ranking Toko";
+        document.getElementById('pageSubtitle').innerText = "Rangkin Toko Berdasarkan SPD dan Growth SPD per Modul";
+
+        sectionSearch.classList.add('hidden');
+        sectionFilterAmAs.classList.add('hidden');
+        sectionFilterRankModul.classList.add('hidden');
+        sectionFilterRankToko.classList.remove('hidden');
+
+        containerToggleInactive.classList.add('hidden');
+        filterModul.classList.add('hidden');
+        sortBy.classList.add('hidden');
+        thJmlToko.classList.add('hidden');
+        thPrimaryCol.innerText = "Toko / KDTK";
+
+        if (rawAllDataCache.length === 0) {
+          fetchMasterDataForRank();
+        } else {
+          populateModulRankTokoDropdown();
+          triggerRankTokoCalculation();
+        }
+      }
+    }
+
+    function fmtNumber(val, decimals = 0) {
+      if (val === undefined || val === null || isNaN(val)) return '0';
+      return val.toLocaleString('de-DE', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+      });
+    }
+
+    async function cariToko() {
+      const input = document.getElementById('inputToko').value.trim().toUpperCase();
+      if (!input) return;
+
+      const tbody = document.getElementById('tabelBody');
+      tbody.innerHTML = '<tr><td colspan="16" class="py-8 text-center text-slate-400 font-medium">Memuat data dari Supabase...</td></tr>';
+
+      if (supabaseClient) {
+        try {
+          const { data, error } = await supabaseClient
+            .from('prodsus_data')
+            .select('*')
+            .or(`KDTK.ilike.%${input}%,NAMA.ilike.%${input}%`);
+
+          if (error) throw error;
+
+          if (!data || data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="16" class="py-8 text-center text-slate-400 font-medium">Data toko tidak ditemukan</td></tr>';
+            resetMetrics();
+            document.getElementById('infoTokoCard').classList.add('hidden');
+            return;
+          }
+
+          storeDataFull = normalizeData(data);
+        } catch (err) {
+          console.error("Error fetching Supabase:", err);
+          tbody.innerHTML = `<tr class="border-b border-slate-100"><td colspan="16" class="py-8 text-center text-rose-500 font-medium">Gagal memuat dari Supabase: ${err.message || err}</td></tr>`;
+          return;
+        }
+      } else {
+        tbody.innerHTML = '<tr><td colspan="16" class="py-8 text-center text-amber-600 font-medium">Supabase belum terkonfigurasi. Isikan SUPABASE_URL & SUPABASE_ANON_KEY pada script.</td></tr>';
+        return;
+      }
+
+      populateFilterModulDropdown(storeDataFull);
+      applyFilterAndSort();
+    }
+
+    async function fetchAllMasterData() {
+      let allData = [];
+      let from = 0;
+      const step = 1000;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data, error } = await supabaseClient
+          .from('prodsus_data')
+          .select('*')
+          .range(from, from + step - 1);
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          allData = allData.concat(data);
+          from += step;
+          if (data.length < step) hasMore = false;
+        } else {
+          hasMore = false;
+        }
+      }
+      return normalizeData(allData);
+    }
+
+    async function fetchGlobalData() {
+      const tbody = document.getElementById('tabelBody');
+      tbody.innerHTML = '<tr><td colspan="17" class="py-8 text-center text-slate-400 font-medium">Memuat data global dari Supabase...</td></tr>';
+
+      if (!supabaseClient) {
+        tbody.innerHTML = '<tr><td colspan="17" class="py-8 text-center text-amber-600 font-medium">Supabase belum terkonfigurasi.</td></tr>';
+        return;
+      }
+
+      try {
+        if (rawAllDataCache.length === 0) {
+          rawAllDataCache = await fetchAllMasterData();
+        }
+
+        if (rawAllDataCache.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="17" class="py-8 text-center text-slate-400 font-medium">Data tidak ditemukan</td></tr>';
+          resetMetrics();
+          return;
+        }
+
+        globalDataFull = aggregateGlobalData(rawAllDataCache);
+        populateFilterModulDropdown(globalDataFull);
+        applyFilterAndSort();
+
+      } catch (err) {
+        console.error("Error fetching Global Data:", err);
+        tbody.innerHTML = `<tr class="border-b border-slate-100"><td colspan="17" class="py-8 text-center text-rose-500 font-medium">Gagal memuat data global: ${err.message || err}</td></tr>`;
+      }
+    }
+
+    async function fetchAllMasterDataForAmAs() {
+      const tbody = document.getElementById('tabelBody');
+      tbody.innerHTML = '<tr><td colspan="17" class="py-8 text-center text-slate-400 font-medium">Memuat data hierarki AM & AS dari Supabase...</td></tr>';
+
+      if (!supabaseClient) {
+        tbody.innerHTML = '<tr><td colspan="17" class="py-8 text-center text-amber-600 font-medium">Supabase belum terkonfigurasi.</td></tr>';
+        return;
+      }
+
+      try {
+        if (rawAllDataCache.length === 0) {
+          rawAllDataCache = await fetchAllMasterData();
+        }
+
+        populateAmAsDropdowns();
+        triggerAmAsCalculation();
+      } catch (err) {
+        console.error("Error fetching Master Data AM/AS:", err);
+        tbody.innerHTML = `<tr class="border-b border-slate-100"><td colspan="17" class="py-8 text-center text-rose-500 font-medium">Gagal memuat data AM/AS: ${err.message || err}</td></tr>`;
+      }
+    }
+
+    async function fetchMasterDataForRank() {
+      const tbody = document.getElementById('tabelBody');
+      tbody.innerHTML = '<tr><td colspan="17" class="py-8 text-center text-slate-400 font-medium">Memuat master data ranking dari Supabase...</td></tr>';
+
+      if (!supabaseClient) {
+        tbody.innerHTML = '<tr><td colspan="17" class="py-8 text-center text-amber-600 font-medium">Supabase belum terkonfigurasi.</td></tr>';
+        return;
+      }
+
+      try {
+        if (rawAllDataCache.length === 0) {
+          rawAllDataCache = await fetchAllMasterData();
+        }
+
+        if (currentMenu === 'rankModul') {
+          triggerRankModulCalculation();
+        } else if (currentMenu === 'rankToko') {
+          populateModulRankTokoDropdown();
+          triggerRankTokoCalculation();
+        }
+      } catch (err) {
+        console.error("Error fetching Master Data Ranking:", err);
+        tbody.innerHTML = `<tr class="border-b border-slate-100"><td colspan="17" class="py-8 text-center text-rose-500 font-medium">Gagal memuat data ranking: ${err.message || err}</td></tr>`;
+      }
+    }
+
+    function getValueByKeys(item, keys) {
+      for (const k of Object.keys(item)) {
+        if (keys.includes(k.toUpperCase())) return item[k];
+      }
+      return null;
+    }
+
+    function normalizeData(data) {
+      return data.map(item => ({
+        toko: getValueByKeys(item, ["KDTK", "TOKO"]) || '',
+        nama: getValueByKeys(item, ["NAMA"]) || '',
+        am: String(getValueByKeys(item, ["AM"]) || '-').trim(),
+        as: String(getValueByKeys(item, ["AS"]) || '-').trim(),
+        modul: getValueByKeys(item, ["MODUL"]) || '-',
+        modul_aktif: String(getValueByKeys(item, ["MODUL_AKTIF"]) || 'AKTIF').toUpperCase(),
+        spd_qty_lm: parseFloat(getValueByKeys(item, ["SPD QTY - LM", "SPD_QTY_LM"])) || 0,
+        spd_rp_lm: parseFloat(getValueByKeys(item, ["SPD RP - LM", "SPD_RP_LM"])) || 0,
+        mrg_lm: parseFloat(getValueByKeys(item, ["MRG % - LM", "MRG_LM"])) || 0,
+        ba_lm: parseFloat(getValueByKeys(item, ["BA % - LM", "BA_LM"])) || 0,
+        nett_mrg_lm: parseFloat(getValueByKeys(item, ["NETT MRG - LM", "NETT_MRG_LM"])) || 0,
+        spd_qty_upd: parseFloat(getValueByKeys(item, ["SPD QTY - UPD", "SPD_QTY_UPD"])) || 0,
+        spd_rp_upd: parseFloat(getValueByKeys(item, ["SPD RP - UPD", "SPD_RP_UPD"])) || 0,
+        mrg_upd: parseFloat(getValueByKeys(item, ["MRG % - UPD", "MRG_UPD"])) || 0,
+        ba_upd: parseFloat(getValueByKeys(item, ["BA % - UPD", "BA_UPD"])) || 0,
+        nett_mrg_upd: parseFloat(getValueByKeys(item, ["NETT MRG - UPD", "NETT_MRG_UPD"])) || 0,
+      }));
+    }
+
+    function aggregateGlobalData(rawData) {
+      const grouped = {};
+
+      rawData.forEach(item => {
+        if (item.modul_aktif !== 'AKTIF') return;
+
+        const modul = item.modul;
+        if (!grouped[modul]) {
+          grouped[modul] = {
+            modul: modul,
+            jml_toko_aktif: 0,
+            spd_qty_lm_sum: 0,
+            spd_qty_upd_sum: 0,
+            spd_rp_lm_sum: 0,
+            spd_rp_upd_sum: 0,
+            mrg_lm_sum: 0,
+            mrg_upd_sum: 0,
+            ba_lm_sum: 0,
+            ba_upd_sum: 0,
+            nett_mrg_lm_sum: 0,
+            nett_mrg_upd_sum: 0
+          };
+        }
+
+        const g = grouped[modul];
+        g.jml_toko_aktif += 1;
+        g.spd_qty_lm_sum += item.spd_qty_lm;
+        g.spd_qty_upd_sum += item.spd_qty_upd;
+        g.spd_rp_lm_sum += item.spd_rp_lm;
+        g.spd_rp_upd_sum += item.spd_rp_upd;
+        g.mrg_lm_sum += item.mrg_lm;
+        g.mrg_upd_sum += item.mrg_upd;
+        g.ba_lm_sum += item.ba_lm;
+        g.ba_upd_sum += item.ba_upd;
+        g.nett_mrg_lm_sum += item.nett_mrg_lm;
+        g.nett_mrg_upd_sum += item.nett_mrg_upd;
+      });
+
+      return Object.values(grouped).map(g => {
+        const count = g.jml_toko_aktif;
+        return {
+          modul: g.modul,
+          jml_toko_aktif: count,
+          modul_aktif: 'AKTIF',
+          spd_qty_lm: count > 0 ? (g.spd_qty_lm_sum / count) : 0,
+          spd_qty_upd: count > 0 ? (g.spd_qty_upd_sum / count) : 0,
+          spd_rp_lm: count > 0 ? (g.spd_rp_lm_sum / count) : 0,
+          spd_rp_upd: count > 0 ? (g.spd_rp_upd_sum / count) : 0,
+          mrg_lm: count > 0 ? (g.mrg_lm_sum / count) : 0,
+          mrg_upd: count > 0 ? (g.mrg_upd_sum / count) : 0,
+          ba_lm: count > 0 ? (g.ba_lm_sum / count) : 0,
+          ba_upd: count > 0 ? (g.ba_upd_sum / count) : 0,
+          nett_mrg_lm: g.nett_mrg_lm_sum,
+          nett_mrg_upd: g.nett_mrg_upd_sum,
+        };
+      });
+    }
+
+    function populateAmAsDropdowns() {
+      const selectAM = document.getElementById('selectAM');
+      const selectAS = document.getElementById('selectAS');
+
+      const selectedAM = selectAM.value;
+      const selectedAS = selectAS.value;
+
+      const amSet = new Set();
+      rawAllDataCache.forEach(d => { if (d.am && d.am !== '-') amSet.add(d.am); });
+      const amList = Array.from(amSet).sort();
+
+      selectAM.innerHTML = '<option value="">-- Pilih AM --</option>';
+      amList.forEach(am => {
+        selectAM.innerHTML += `<option value="${am}">${am}</option>`;
+      });
+
+      if (selectedAM && amSet.has(selectedAM)) {
+        selectAM.value = selectedAM;
+      }
+
+      populateASDropdown(selectAM.value, selectedAS);
+    }
+
+    function populateASDropdown(selectedAMValue, keepASValue = '') {
+      const selectAS = document.getElementById('selectAS');
+      selectAS.innerHTML = '<option value="">-- Pilih AS --</option>';
+
+      let filteredData = rawAllDataCache;
+      if (selectedAMValue) {
+        filteredData = rawAllDataCache.filter(d => d.am === selectedAMValue);
+      }
+
+      const asSet = new Set();
+      filteredData.forEach(d => { if (d.as && d.as !== '-') asSet.add(d.as); });
+      const asList = Array.from(asSet).sort();
+
+      asList.forEach(as => {
+        selectAS.innerHTML += `<option value="${as}">${as}</option>`;
+      });
+
+      if (keepASValue && asSet.has(keepASValue)) {
+        selectAS.value = keepASValue;
+      }
+    }
+
+    function handleAmAsRadioChange() {
+      const type = document.querySelector('input[name="radioAmAsType"]:checked').value;
+      const selectAM = document.getElementById('selectAM');
+      const selectAS = document.getElementById('selectAS');
+
+      if (type === 'AM') {
+        selectAS.value = '';
+        selectAS.disabled = true;
+      } else {
+        selectAS.disabled = false;
+      }
+
+      triggerAmAsCalculation();
+    }
+
+    function handleSelectAMChange() {
+      const selectedAM = document.getElementById('selectAM').value;
+      populateASDropdown(selectedAM);
+
+      const type = document.querySelector('input[name="radioAmAsType"]:checked').value;
+      if (type === 'AS') {
+        document.getElementById('selectAS').value = '';
+      }
+
+      triggerAmAsCalculation();
+    }
+
+    function handleSelectASChange() {
+      triggerAmAsCalculation();
+    }
+
+    function triggerAmAsCalculation() {
+      if (currentMenu !== 'amas') return;
+
+      const type = document.querySelector('input[name="radioAmAsType"]:checked').value;
+      const selectedAM = document.getElementById('selectAM').value;
+      const selectedAS = document.getElementById('selectAS').value;
+
+      const infoCard = document.getElementById('infoAmAsCard');
+      const infoLabel = document.getElementById('infoAmAsLabel');
+      const infoName = document.getElementById('infoAmAsName');
+      const infoTotalToko = document.getElementById('infoAmAsTotalToko');
+
+      let filteredRows = [];
+
+      if (type === 'AM') {
+        if (!selectedAM) {
+          renderTabel([]);
+          infoCard.classList.add('hidden');
+          return;
+        }
+        filteredRows = rawAllDataCache.filter(d => d.am === selectedAM);
+        infoLabel.innerText = "Area Manager (AM)";
+        infoName.innerText = selectedAM;
+      } else {
+        if (!selectedAS) {
+          renderTabel([]);
+          infoCard.classList.add('hidden');
+          return;
+        }
+        filteredRows = rawAllDataCache.filter(d => d.as === selectedAS);
+        infoLabel.innerText = "Area Supervisor (AS)";
+        infoName.innerText = selectedAS;
+      }
+
+      const totalTokoUnik = new Set(filteredRows.map(d => d.toko)).size;
+      infoTotalToko.innerText = `${fmtNumber(totalTokoUnik)} Toko`;
+      infoCard.classList.remove('hidden');
+
+      amAsCalculatedData = aggregateGlobalData(filteredRows);
+      populateFilterModulDropdown(amAsCalculatedData);
+      applyFilterAndSort();
+    }
+
+    function triggerRankModulCalculation() {
+      if (currentMenu !== 'rankModul') return;
+
+      const rankType = document.querySelector('input[name="radioRankModul"]:checked').value;
+      let baseData = aggregateGlobalData(rawAllDataCache);
+
+      if (rankType === 'SPD') {
+        baseData.sort((a, b) => b.spd_rp_upd - a.spd_rp_upd);
+      } else {
+        baseData.sort((a, b) => {
+          const gA = a.spd_rp_lm > 0 ? ((a.spd_rp_upd - a.spd_rp_lm) / a.spd_rp_lm) * 100 : 0;
+          const gB = b.spd_rp_lm > 0 ? ((b.spd_rp_upd - b.spd_rp_lm) / b.spd_rp_lm) * 100 : 0;
+          return gB - gA;
+        });
+      }
+
+      rankModulData = baseData;
+      renderTabel(rankModulData);
+    }
+
+    function populateModulRankTokoDropdown() {
+      const select = document.getElementById('selectModulRankToko');
+      const currentVal = select.value;
+
+      select.innerHTML = '<option value="ALL">Semua Modul</option>';
+      const uniqueModuls = [...new Set(rawAllDataCache.map(d => d.modul))].filter(m => m && m !== '-').sort();
+
+      uniqueModuls.forEach(modul => {
+        select.innerHTML += `<option value="${modul}">${modul}</option>`;
+      });
+
+      if (currentVal && uniqueModuls.includes(currentVal)) {
+        select.value = currentVal;
+      }
+    }
+
+    function triggerRankTokoCalculation() {
+      if (currentMenu !== 'rankToko') return;
+
+      const rankType = document.querySelector('input[name="radioRankToko"]:checked').value;
+      const selectedModul = document.getElementById('selectModulRankToko').value;
+
+      let filteredData = rawAllDataCache.filter(d => d.modul_aktif === 'AKTIF');
+      if (selectedModul !== 'ALL') {
+        filteredData = filteredData.filter(d => d.modul === selectedModul);
+      }
+
+      const groupedByToko = {};
+      filteredData.forEach(item => {
+        const key = item.toko;
+        if (!groupedByToko[key]) {
+          groupedByToko[key] = {
+            toko: item.toko,
+            nama: item.nama,
+            modul: selectedModul === 'ALL' ? 'Semua Modul' : selectedModul,
+            modul_aktif: 'AKTIF',
+            spd_qty_lm: 0,
+            spd_qty_upd: 0,
+            spd_rp_lm: 0,
+            spd_rp_upd: 0,
+            mrg_lm_sum: 0,
+            mrg_upd_sum: 0,
+            ba_lm_sum: 0,
+            ba_upd_sum: 0,
+            nett_mrg_lm: 0,
+            nett_mrg_upd: 0,
+            count: 0
+          };
+        }
+
+        const g = groupedByToko[key];
+        g.spd_qty_lm += item.spd_qty_lm;
+        g.spd_qty_upd += item.spd_qty_upd;
+        g.spd_rp_lm += item.spd_rp_lm;
+        g.spd_rp_upd += item.spd_rp_upd;
+        g.mrg_lm_sum += item.mrg_lm;
+        g.mrg_upd_sum += item.mrg_upd;
+        g.ba_lm_sum += item.ba_lm;
+        g.ba_upd_sum += item.ba_upd;
+        g.nett_mrg_lm += item.nett_mrg_lm;
+        g.nett_mrg_upd += item.nett_mrg_upd;
+        g.count += 1;
+      });
+
+      let storeList = Object.values(groupedByToko).map(g => ({
+        modul: `${g.toko} - ${g.nama}`,
+        modul_aktif: 'AKTIF',
+        spd_qty_lm: g.spd_qty_lm,
+        spd_qty_upd: g.spd_qty_upd,
+        spd_rp_lm: g.spd_rp_lm,
+        spd_rp_upd: g.spd_rp_upd,
+        mrg_lm: g.count > 0 ? (g.mrg_lm_sum / g.count) : 0,
+        mrg_upd: g.count > 0 ? (g.mrg_upd_sum / g.count) : 0,
+        ba_lm: g.count > 0 ? (g.ba_lm_sum / g.count) : 0,
+        ba_upd: g.count > 0 ? (g.ba_upd_sum / g.count) : 0,
+        nett_mrg_lm: g.nett_mrg_lm,
+        nett_mrg_upd: g.nett_mrg_upd
+      }));
+
+      if (rankType === 'SPD') {
+        storeList.sort((a, b) => b.spd_rp_upd - a.spd_rp_upd);
+      } else {
+        storeList.sort((a, b) => {
+          const gA = a.spd_rp_lm > 0 ? ((a.spd_rp_upd - a.spd_rp_lm) / a.spd_rp_lm) * 100 : 0;
+          const gB = b.spd_rp_lm > 0 ? ((b.spd_rp_upd - b.spd_rp_lm) / b.spd_rp_lm) * 100 : 0;
+          return gB - gA;
+        });
+      }
+
+      rankTokoData = storeList;
+      renderTabel(rankTokoData);
+    }
+
+    function populateFilterModulDropdown(data) {
+      const select = document.getElementById('filterModul');
+      select.innerHTML = '<option value="ALL">Semua Modul</option>';
+      
+      const uniqueModuls = [...new Set(data.map(d => d.modul))].filter(m => m && m !== '-').sort();
+      uniqueModuls.forEach(modul => {
+        select.innerHTML += `<option value="${modul}">${modul}</option>`;
+      });
+    }
+
+    function applyFilterAndSort() {
+      let targetData = [];
+      if (currentMenu === 'toko') targetData = storeDataFull;
+      else if (currentMenu === 'global') targetData = globalDataFull;
+      else if (currentMenu === 'amas') targetData = amAsCalculatedData;
+
+      if (!targetData || targetData.length === 0) {
+        renderTabel([]);
+        return;
+      }
+
+      const showInactive = document.getElementById('toggleInactive').checked;
+      const filterVal = document.getElementById('filterModul').value;
+      const sortVal = document.getElementById('sortBy').value;
+
+      let processed = targetData.filter(item => {
+        if (currentMenu === 'toko') {
+          const matchesActive = showInactive ? (item.modul_aktif !== 'AKTIF') : (item.modul_aktif === 'AKTIF');
+          const matchesCategory = (filterVal === 'ALL' || item.modul === filterVal);
+          return matchesActive && matchesCategory;
+        } else {
+          return (filterVal === 'ALL' || item.modul === filterVal);
+        }
+      });
+
+      processed.sort((a, b) => {
+        const growthA = a.spd_rp_lm > 0 ? ((a.spd_rp_upd - a.spd_rp_lm) / a.spd_rp_lm) * 100 : 0;
+        const growthB = b.spd_rp_lm > 0 ? ((b.spd_rp_upd - b.spd_rp_lm) / b.spd_rp_lm) * 100 : 0;
+
+        if (sortVal === 'SPD_RP_DESC') return growthB - growthA;
+        if (sortVal === 'SPD_RP_ASC') return growthA - growthB;
+        if (sortVal === 'SPD_UPD_DESC') return b.spd_rp_upd - a.spd_rp_upd;
+        if (sortVal === 'MARGIN_DESC') return b.mrg_upd - a.mrg_upd;
+        return 0;
+      });
+
+      renderTabel(processed);
+    }
+
+    function renderTabel(data) {
+      const tbody = document.getElementById('tabelBody');
+      const infoCard = document.getElementById('infoTokoCard');
+      const isMultiStore = (currentMenu === 'global' || currentMenu === 'amas' || currentMenu === 'rankModul');
+      const colSpan = isMultiStore ? 17 : 16;
+
+      if (!data || data.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="${colSpan}" class="py-8 text-center text-slate-400 font-medium">Tidak ada data modul yang memenuhi kriteria filter</td></tr>`;
+        resetMetrics();
+        return;
+      }
+
+      if (currentMenu === 'toko') {
+        const first = storeDataFull[0] || data[0];
+        document.getElementById('infoNamaToko').innerText = `${first.toko} - ${first.nama}`;
+        document.getElementById('infoAM').innerText = first.am;
+        document.getElementById('infoAS').innerText = first.as;
+        infoCard.classList.remove('hidden');
+      }
+
+      tbody.innerHTML = '';
+      currentCalculatedData = [];
+
+      const fragment = document.createDocumentFragment();
+
+      data.forEach(item => {
+        const qLM = item.spd_qty_lm, qUPD = item.spd_qty_upd;
+        const qGrowth = qLM > 0 ? ((qUPD - qLM) / qLM) * 100 : 0;
+
+        const rLM = item.spd_rp_lm, rUPD = item.spd_rp_upd;
+        const rGrowth = rLM > 0 ? ((rUPD - rLM) / rLM) * 100 : 0;
+
+        const mLM = item.mrg_lm, mUPD = item.mrg_upd;
+        const mDiff = mUPD - mLM;
+
+        const bLM = item.ba_lm, bUPD = item.ba_upd;
+        const bDiff = bUPD - bLM;
+
+        const nLM = item.nett_mrg_lm, nUPD = item.nett_mrg_upd;
+        const nGrowth = nLM > 0 ? ((nUPD - nLM) / nLM) * 100 : 0;
+
+        currentCalculatedData.push({
+          MODUL: item.modul,
+          STATUS: item.modul_aktif,
+          JML_TOKO_AKTIF: item.jml_toko_aktif || 0,
+          QTY_LM: qLM, QTY_UPD: qUPD, QTY_GROWTH: qGrowth,
+          RP_LM: rLM, RP_UPD: rUPD, RP_GROWTH: rGrowth,
+          MRG_LM: mLM, MRG_UPD: mUPD, MRG_DIFF: mDiff,
+          BA_LM: bLM, BA_UPD: bUPD, BA_DIFF: bDiff,
+          NETT_LM: nLM, NETT_UPD: nUPD, NETT_GROWTH: nGrowth
+        });
+
+        const formatBadge = (val, isReverse = false) => {
+          if (val === 0) return `<span class="text-slate-400 font-semibold">0,00%</span>`;
+          let isGood = val > 0;
+          if (isReverse) isGood = !isGood;
+
+          const color = isGood ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200';
+          const icon = val > 0 ? '▲' : '▼';
+          
+          return `<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border text-[10px] font-bold ${color}">
+            ${icon} ${fmtNumber(Math.abs(val), 2)}%
+          </span>`;
+        };
+
+        const isInactiveRow = item.modul_aktif !== 'AKTIF';
+        const rowClass = isInactiveRow ? 'bg-slate-50/70 text-slate-400' : 'hover:bg-slate-50';
+        const cellBgClass = isInactiveRow ? 'bg-slate-100' : 'bg-white';
+
+        let htmlRow = `
+          <tr class="${rowClass} transition border-b border-slate-100">
+            <td class="sticky left-0 z-10 ${cellBgClass} py-2.5 px-3 font-bold text-slate-800 text-left border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+              ${item.modul}
+              ${isInactiveRow ? '<span class="ml-1 text-[9px] px-1 py-0.5 bg-slate-200 text-slate-600 rounded font-normal">OFF</span>' : ''}
+            </td>
+        `;
+
+        if (isMultiStore) {
+          htmlRow += `
+            <td class="py-2.5 px-3 text-center border-r border-slate-200 font-extrabold text-indigo-700 bg-indigo-50/30">
+              ${fmtNumber(item.jml_toko_aktif)}
+            </td>
+          `;
+        }
+
+        htmlRow += `
+            <td class="py-2.5 px-2 text-slate-600">${fmtNumber(qLM, 2)}</td>
+            <td class="py-2.5 px-2 text-slate-900 font-medium">${fmtNumber(qUPD, 2)}</td>
+            <td class="py-2.5 px-2 border-r border-slate-200">${formatBadge(qGrowth)}</td>
+            <td class="py-2.5 px-2 bg-indigo-50/20 text-slate-600">Rp ${fmtNumber(rLM)}</td>
+            <td class="py-2.5 px-2 bg-indigo-50/20 text-slate-900 font-bold">Rp ${fmtNumber(rUPD)}</td>
+            <td class="py-2.5 px-2 bg-indigo-50/20 border-r border-slate-200">${formatBadge(rGrowth)}</td>
+            <td class="py-2.5 px-2 text-slate-600">${fmtNumber(mLM, 2)}%</td>
+            <td class="py-2.5 px-2 text-slate-900 font-medium">${fmtNumber(mUPD, 2)}%</td>
+            <td class="py-2.5 px-2 border-r border-slate-200">${formatBadge(mDiff)}</td>
+            <td class="py-2.5 px-2 text-slate-600">${fmtNumber(bLM, 2)}%</td>
+            <td class="py-2.5 px-2 text-slate-900 font-medium">${fmtNumber(bUPD, 2)}%</td>
+            <td class="py-2.5 px-2 border-r border-slate-200">${formatBadge(bDiff, true)}</td>
+            <td class="py-2.5 px-2 bg-indigo-50/20 text-slate-600">Rp ${fmtNumber(nLM)}</td>
+            <td class="py-2.5 px-2 bg-indigo-50/20 text-slate-900 font-bold">Rp ${fmtNumber(nUPD)}</td>
+            <td class="py-2.5 px-2 bg-indigo-50/20">${formatBadge(nGrowth)}</td>
+          </tr>
+        `;
+
+        const tr = document.createElement('tbody');
+        tr.innerHTML = htmlRow;
+        fragment.appendChild(tr.firstElementChild);
+      });
+
+      tbody.appendChild(fragment);
+
+      const totalLM = data.reduce((a, b) => a + b.spd_rp_lm, 0);
+      const totalUPD = data.reduce((a, b) => a + b.spd_rp_upd, 0);
+      const totalGrowth = totalLM > 0 ? ((totalUPD - totalLM) / totalLM) * 100 : 0;
+
+      document.getElementById('totalSpdLM').innerText = `Rp ${fmtNumber(totalLM)}`;
+      document.getElementById('totalSpdUPD').innerText = `Rp ${fmtNumber(totalUPD)}`;
+
+      const growthEl = document.getElementById('growthSPD');
+      growthEl.innerText = `${fmtNumber(totalGrowth, 2)}%`;
+      if (totalGrowth < 0) {
+        growthEl.className = "text-xl md:text-2xl font-black text-rose-600 mt-1";
+      } else {
+        growthEl.className = "text-xl md:text-2xl font-black text-emerald-600 mt-1";
+      }
+    }
+
+    function resetSearch() {
+      document.getElementById('inputToko').value = '';
+      document.getElementById('tabelBody').innerHTML = '<tr><td colspan="16" class="py-8 text-center text-slate-400">Ketik kode/nama toko di atas untuk menampilkan data analytics</td></tr>';
+      document.getElementById('infoTokoCard').classList.add('hidden');
+      document.getElementById('filterModul').innerHTML = '<option value="ALL">Semua Modul</option>';
+      document.getElementById('toggleInactive').checked = false;
+      storeDataFull = [];
+      resetMetrics();
+    }
+
+    function resetMetrics() {
+      document.getElementById('totalSpdLM').innerText = 'Rp 0';
+      document.getElementById('totalSpdUPD').innerText = 'Rp 0';
+      const growthEl = document.getElementById('growthSPD');
+      growthEl.innerText = '0,00%';
+      growthEl.className = "text-xl md:text-2xl font-black text-emerald-600 mt-1";
+      currentCalculatedData = [];
+    }
+
+    function exportToExcel() {
+      if (!currentCalculatedData || currentCalculatedData.length === 0) {
+        alert("Tidak ada data untuk di-export!");
+        return;
+      }
+
+      const isMultiStore = (currentMenu === 'global' || currentMenu === 'amas' || currentMenu === 'rankModul');
+      
+      let titleName = "Data_Toko";
+      if (currentMenu === 'global') {
+        titleName = "Global_Comparison";
+      } else if (currentMenu === 'amas') {
+        const type = document.querySelector('input[name="radioAmAsType"]:checked').value;
+        const val = type === 'AM' ? document.getElementById('selectAM').value : document.getElementById('selectAS').value;
+        titleName = `Report_${type}_${val || 'All'}`;
+      } else if (currentMenu === 'rankModul') {
+        const type = document.querySelector('input[name="radioRankModul"]:checked').value;
+        titleName = `Ranking_Modul_${type}`;
+      } else if (currentMenu === 'rankToko') {
+        const type = document.querySelector('input[name="radioRankToko"]:checked').value;
+        const modul = document.getElementById('selectModulRankToko').value;
+        titleName = `Ranking_Toko_${type}_${modul}`;
+      } else {
+        titleName = document.getElementById('infoNamaToko').innerText || 'Data_Toko';
+      }
+
+      let excelHeaderRow1 = [currentMenu === 'rankToko' ? "TOKO" : "MODUL"];
+      if (isMultiStore) excelHeaderRow1.push("JML TOKO MAIN");
+      excelHeaderRow1.push("STATUS", "SPD QTY", "", "", "SPD RP", "", "", "MARGIN %", "", "", "BA %", "", "", "NETT MARGIN (RP)", "", "");
+
+      let excelHeaderRow2 = [""];
+      if (isMultiStore) excelHeaderRow2.push("");
+      excelHeaderRow2.push("", "LM", "UPD", "Growth (%)", "LM", "UPD", "Growth (%)", "LM", "UPD", "Selisih (%)", "LM", "UPD", "Selisih (%)", "LM", "UPD", "Growth (%)");
+
+      const excelRows = currentCalculatedData.map(d => {
+        let row = [d.MODUL];
+        if (isMultiStore) row.push(d.JML_TOKO_AKTIF);
+        row.push(
+          d.STATUS,
+          d.QTY_LM, d.QTY_UPD, `${fmtNumber(d.QTY_GROWTH, 2)}%`,
+          d.RP_LM, d.RP_UPD, `${fmtNumber(d.RP_GROWTH, 2)}%`,
+          `${fmtNumber(d.MRG_LM, 2)}%`, `${fmtNumber(d.MRG_UPD, 2)}%`, `${fmtNumber(d.MRG_DIFF, 2)}%`,
+          `${fmtNumber(d.BA_LM, 2)}%`, `${fmtNumber(d.BA_UPD, 2)}%`, `${fmtNumber(d.BA_DIFF, 2)}%`,
+          d.NETT_LM, d.NETT_UPD, `${fmtNumber(d.NETT_GROWTH, 2)}%`
+        );
+        return row;
+      });
+
+      const worksheetData = [excelHeaderRow1, excelHeaderRow2, ...excelRows];
+      const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Analytics");
+
+      XLSX.writeFile(workbook, `${titleName.replace(/[^a-zA-Z0-9]/g, "_")}.xlsx`);
+    }
+  </script>
+</body>
+</html>
