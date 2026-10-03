@@ -399,7 +399,7 @@
                 Modul
               </th>
               
-              <th id="thJmlToko" rowspan="2" class="sticky top-0 z-20 py-3 px-3 text-center border-r border-b border-slate-200 bg-indigo-100 text-indigo-900">
+              <th id="thJmlToko" rowspan="2" class="hidden sticky top-0 z-20 py-3 px-3 text-center border-r border-b border-slate-200 bg-indigo-100 text-indigo-900">
                 Jml Toko Main
               </th>
               
@@ -434,7 +434,7 @@
           </thead>
           <tbody id="tabelBody" class="divide-y divide-slate-100 font-medium">
             <tr>
-              <td colspan="17" class="py-8 text-center text-slate-400 font-medium bg-white">
+              <td colspan="16" class="py-8 text-center text-slate-400 font-medium bg-white">
                 Ketik kode/nama toko di atas untuk menampilkan data analytics
               </td>
             </tr>
@@ -578,6 +578,7 @@
 
         document.getElementById('loginModal').classList.add('hidden');
         resetInactivityTimer();
+        switchMenu('toko');
       } catch (err) {
         errEl.innerText = "Error autentikasi: " + err.message;
         errEl.classList.remove('hidden');
@@ -595,6 +596,7 @@
     // PAKSA LOGOUT/MINTA PASSWORD SAAT DI-REFRESH
     window.addEventListener('DOMContentLoaded', () => {
       handleLogout();
+      switchMenu('toko');
     });
 
     /* MANAGEMENT ADMIN USER */
