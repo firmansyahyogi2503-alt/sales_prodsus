@@ -215,10 +215,15 @@
           <input 
             type="text" 
             id="inputToko" 
-            placeholder="Masukkan Kode Toko (KDTK) atau Nama Toko..." 
+            placeholder="Masukkan Kode Toko (toko/KDTK) atau Nama Toko..." 
             class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition uppercase placeholder:normal-case placeholder:font-normal placeholder:text-slate-400 text-sm"
+            oninput="handleInputSuggest(event.target.value)"
+            onkeydown="handleKeyNavSuggest(event)"
             onkeypress="if(event.key === 'Enter') cariToko()"
+            autocomplete="off"
           />
+          <!-- SUGGEST DROPDOWN CONTAINER -->
+          <div id="suggestDropdown" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto divide-y divide-slate-100"></div>
         </div>
         <div class="flex gap-2">
           <button 
@@ -517,6 +522,158 @@
     let rankTokoData = [];
     let currentCalculatedData = [];
     let isSidebarOpen = true;
+
+    // --- LOGIKA SUGGEST DROPDOWN PENCARIAN TOKO ---
+    let selectedSuggestIndex = -1;
+    let suggestDebounceTimer = null;
+
+    async function handleInputSuggest(query) {
+      const dropdown = document.getElementById('suggestDropdown');
+      const val = String(query || '').trim().toUpperCase();
+
+      clearTimeout(suggestDebounceTimer);
+      selectedSuggestIndex = -1;
+
+      if (!val || val.length < 2) {
+        if (dropdown) {
+          dropdown.innerHTML = '';
+          dropdown.classList.add('hidden');
+        }
+        return;
+      }
+
+      suggestDebounceTimer = setTimeout(async () => {
+        if (!supabaseClient) return;
+
+        try {
+          // Pecah tiap kata agar pencarian multi-kata fleksibel
+          const words = val.split(/\s+/).filter(Boolean);
+          
+          const wordConditions = words.flatMap(word => [
+            `KDTK.ilike.%${word}%`,
+            `NAMA.ilike.%${word}%`
+          ]);
+
+          const orConditions = wordConditions.join(',');
+
+          const { data, error } = await supabaseClient
+            .from('prodsus_data')
+            .select('*')
+            .or(orConditions)
+            .limit(500);
+
+          if (error) {
+            console.error("Error Supabase Query:", error);
+            if (dropdown) dropdown.classList.add('hidden');
+            return;
+          }
+
+          if (!data || data.length === 0) {
+            if (dropdown) {
+              dropdown.innerHTML = '';
+              dropdown.classList.add('hidden');
+            }
+            return;
+          }
+
+          // Filter unik berdasarkan kode toko
+          const uniqueStores = [];
+          const seenKdtk = new Set();
+
+          data.forEach(item => {
+            const kode = getValueByKeys(item, ["TOKO", "KDTK"]);
+            const namaToko = getValueByKeys(item, ["NAMA"]) || '';
+            if (kode && !seenKdtk.has(kode)) {
+              seenKdtk.add(kode);
+              uniqueStores.push({ kdtk: kode, nama: namaToko });
+            }
+          });
+
+          if (uniqueStores.length === 0) {
+            if (dropdown) {
+              dropdown.innerHTML = '';
+              dropdown.classList.add('hidden');
+            }
+            return;
+          }
+
+          if (dropdown) {
+            dropdown.innerHTML = uniqueStores.map(s => `
+              <div 
+                onclick="selectSuggestItem('${s.kdtk}')"
+                class="suggest-item px-4 py-2.5 hover:bg-indigo-50 cursor-pointer flex items-center justify-between transition text-xs border-b border-slate-100 last:border-none"
+              >
+                <span class="font-bold text-indigo-950 uppercase">${s.kdtk} - ${s.nama}</span>
+                <span class="text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">Pilih</span>
+              </div>
+            `).join('');
+
+            dropdown.classList.remove('hidden');
+          }
+        } catch (err) {
+          console.error("Error suggest handler:", err);
+          if (dropdown) dropdown.classList.add('hidden');
+        }
+      }, 300);
+    }
+
+    function selectSuggestItem(kdtk) {
+      const input = document.getElementById('inputToko');
+      if (input) input.value = kdtk;
+      
+      hideSuggestBox();
+      if (typeof cariToko === 'function') {
+        cariToko();
+      }
+    }
+
+    function hideSuggestBox() {
+      const dropdown = document.getElementById('suggestDropdown');
+      if (dropdown) dropdown.classList.add('hidden');
+      selectedSuggestIndex = -1;
+    }
+
+    function handleKeyNavSuggest(e) {
+      const dropdown = document.getElementById('suggestDropdown');
+      if (!dropdown) return;
+
+      const items = dropdown.querySelectorAll('.suggest-item');
+      if (dropdown.classList.contains('hidden') || items.length === 0) return;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        selectedSuggestIndex = (selectedSuggestIndex + 1) % items.length;
+        updateSuggestSelection(items);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        selectedSuggestIndex = (selectedSuggestIndex - 1 + items.length) % items.length;
+        updateSuggestSelection(items);
+      } else if (e.key === 'Enter' && selectedSuggestIndex >= 0) {
+        e.preventDefault();
+        items[selectedSuggestIndex].click();
+      } else if (e.key === 'Escape') {
+        hideSuggestBox();
+      }
+    }
+
+    function updateSuggestSelection(items) {
+      items.forEach((item, index) => {
+        if (index === selectedSuggestIndex) {
+          item.classList.add('bg-indigo-100');
+          item.scrollIntoView({ block: 'nearest' });
+        } else {
+          item.classList.remove('bg-indigo-100');
+        }
+      });
+    }
+
+    document.addEventListener('click', (e) => {
+      const dropdown = document.getElementById('suggestDropdown');
+      const input = document.getElementById('inputToko');
+      if (dropdown && !dropdown.contains(e.target) && e.target !== input) {
+        hideSuggestBox();
+      }
+    });
 
     // --- LOGIKA AUTENTIKASI DAN KEAMANAN 15 MENIT TIMEOUT ---
     let currentUser = null;
